@@ -1,411 +1,525 @@
-
 <?php
-$pageTitle = "Maintenance";
-include "../includes/sidebar.php";
-include "../includes/topbar.php";
+
+$pageTitle       = "Maintenance";
+$pageDescription = "Repairs and service records";
+$pageStyles      = ["maintenance"];
+
+
+$catalog = [
+    "LAP-0001" => "Dell Latitude 5440",
+    "LAP-0002" => "Lenovo ThinkPad E14",
+    "LAP-0003" => "HP ProBook 450 G10",
+    "LAP-0004" => "Apple MacBook Air M2",
+    "LAP-0005" => "Acer TravelMate P2",
+    "DSK-0001" => "Dell OptiPlex 7010",
+    "DSK-0002" => "Dell OptiPlex 7010",
+    "DSK-0003" => "HP EliteDesk 800 G6",
+    "DSK-0004" => "Lenovo ThinkCentre M70q",
+    "MON-0001" => "Dell P2422H Monitor",
+    "MON-0002" => "LG 27UL500 Monitor",
+    "MON-0003" => "Samsung S24R350",
+    "PRN-0001" => "HP LaserJet Pro M404dn",
+    "PRN-0002" => "Brother HL-L2350DW",
+    "PRN-0003" => "Epson EcoTank L3250",
+    "NET-0001" => "Cisco Catalyst 2960 Switch",
+    "NET-0002" => "Ubiquiti UniFi U6 Lite",
+    "NET-0003" => "MikroTik hEX RB750Gr3",
+    "PER-0001" => "Epson EB-X51 Projector",
+    "PER-0002" => "Logitech C920 Webcam",
+    "PER-0003" => "Logitech MX Keys Keyboard",
+];
+
+function record(string $tag, string $issue, string $date, float $cost, string $status, string $action = ""): array {
+    return compact("tag", "issue", "date", "cost", "status", "action");
+}
+
+$records = [
+    record("LAP-0005", "Battery does not hold charge", "2026-10-20", 3200, "Ongoing"),
+    record("PRN-0002", "Paper jam and roller wear",    "2026-10-24", 1450, "Ongoing"),
+    record("MON-0003", "Flickering display",           "2026-08-14", 2100, "Completed"),
+    record("DSK-0001", "Slow boot, failing HDD",       "2026-07-02", 2850, "Completed"),
+    record("NET-0001", "Port 12 not linking",          "2026-09-18", 0,    "Completed"),
+];
+
+$jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE;
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hardware Inventory | Hardware Management System</title>
-    <link rel="stylesheet" href="../css/style.css">
+    <?php include "../includes/head.php"; ?>
 </head>
 <body class="dashboard-page">
-    
-<main class="content-area">
 
-    <div class="page-heading">
-        <div>
-            <h2>Maintenance Records</h2>
-            <p>Track hardware issues, repairs, and maintenance history.</p>
-        </div>
+    <?php include "../includes/sidebar.php"; ?>
 
-        <button class="primary-button" onclick="openMaintenanceModal()">
-            + Add Maintenance
-        </button>
-    </div>
+    <main class="main-content">
+        <?php include "../includes/topbar.php"; ?>
 
-    <!-- Summary Cards -->
-    <div class="dashboard-cards">
-        <div class="dashboard-card">
-            <p>Total Records</p>
-            <h2 id="totalRecords">4</h2>
-        </div>
+        <section class="content-area">
 
-        <div class="dashboard-card">
-            <p>Ongoing</p>
-            <h2 id="ongoingRecords">2</h2>
-        </div>
+            
+            <div class="stat-grid">
+                <article class="stat-card">
+                    <div class="stat-top">
+                        <span>Total Records</span>
+                        <span class="stat-icon blue"><i class="bi bi-clipboard-data"></i></span>
+                    </div>
+                    <h3 id="statTotal">0</h3>
+                </article>
 
-        <div class="dashboard-card">
-            <p>Completed</p>
-            <h2 id="completedRecords">2</h2>
-        </div>
+                <article class="stat-card">
+                    <div class="stat-top">
+                        <span>Ongoing Repairs</span>
+                        <span class="stat-icon amber"><i class="bi bi-wrench"></i></span>
+                    </div>
+                    <h3 id="statOngoing">0</h3>
+                </article>
 
-        <div class="dashboard-card">
-            <p>Total Repair Cost</p>
-            <h2 id="totalRepairCost">₱3,500.00</h2>
-        </div>
-    </div>
+                <article class="stat-card">
+                    <div class="stat-top">
+                        <span>Completed Repairs</span>
+                        <span class="stat-icon green"><i class="bi bi-check-circle"></i></span>
+                    </div>
+                    <h3 id="statCompleted">0</h3>
+                </article>
 
-    <!-- Search and Filter -->
-    <div class="inventory-toolbar">
-        <input
-            type="text"
-            id="maintenanceSearch"
-            placeholder="Search asset tag, hardware, or issue..."
-            oninput="filterMaintenance()"
-        >
-
-        <select id="maintenanceStatusFilter" onchange="filterMaintenance()">
-            <option value="all">All Statuses</option>
-            <option value="Ongoing">Ongoing</option>
-            <option value="Completed">Completed</option>
-        </select>
-    </div>
-
-    <!-- Maintenance Table -->
-    <div class="table-container">
-        <table class="hardware-table">
-            <thead>
-                <tr>
-                    <th>Asset Tag</th>
-                    <th>Hardware</th>
-                    <th>Issue</th>
-                    <th>Maintenance Date</th>
-                    <th>Repair Cost</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-
-            <tbody id="maintenanceTableBody">
-                <tr>
-                    <td>HW-001</td>
-                    <td>Desktop Computer</td>
-                    <td>Overheating</td>
-                    <td>2026-10-20</td>
-                    <td data-cost="1500">₱1,500.00</td>
-                    <td><span class="status-badge maintenance">Ongoing</span></td>
-                    <td>
-                        <button class="text-button" onclick="completeMaintenance(this)">
-                            Complete
-                        </button>
-                    </td>
-                </tr>
-
-                <tr>
-                    <td>HW-002</td>
-                    <td>HP Printer</td>
-                    <td>Paper jam</td>
-                    <td>2026-10-21</td>
-                    <td data-cost="500">₱500.00</td>
-                    <td><span class="status-badge maintenance">Ongoing</span></td>
-                    <td>
-                        <button class="text-button" onclick="completeMaintenance(this)">
-                            Complete
-                        </button>
-                    </td>
-                </tr>
-
-                <tr>
-                    <td>HW-003</td>
-                    <td>Network Switch</td>
-                    <td>Faulty power supply</td>
-                    <td>2026-10-15</td>
-                    <td data-cost="1200">₱1,200.00</td>
-                    <td><span class="status-badge available">Completed</span></td>
-                    <td><span>—</span></td>
-                </tr>
-
-                <tr>
-                    <td>HW-004</td>
-                    <td>Office Monitor</td>
-                    <td>Display flickering</td>
-                    <td>2026-10-18</td>
-                    <td data-cost="300">₱300.00</td>
-                    <td><span class="status-badge available">Completed</span></td>
-                    <td><span>—</span></td>
-                </tr>
-            </tbody>
-        </table>
-
-        <p id="maintenanceEmptyMessage" class="empty-message" style="display:none;">
-            No maintenance records found.
-        </p>
-    </div>
-
-</main>
-
-<!-- Add Maintenance Modal -->
-<div class="modal-overlay" id="maintenanceModal" style="display:none;">
-    <div class="modal-card">
-
-        <div class="modal-header">
-            <div>
-                <h2>Add Maintenance Record</h2>
-                <p>Enter the hardware issue and repair details.</p>
+                <article class="stat-card">
+                    <div class="stat-top">
+                        <span>Total Repair Costs</span>
+                        <span class="stat-icon gray"><i class="bi bi-cash-coin"></i></span>
+                    </div>
+                    <h3 id="statCost">₱0.00</h3>
+                </article>
             </div>
 
-            <button class="close-button" onclick="closeMaintenanceModal()">
-                &times;
-            </button>
-        </div>
+            <div class="table-card">
 
-        <form id="maintenanceForm">
+                <div class="table-toolbar" id="toolbar">
+                    <label class="search-field">
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                        <input type="search" data-filter="search" placeholder="Search asset tag, hardware or issue" aria-label="Search maintenance records">
+                    </label>
 
-            <div class="modal-form-grid">
+                    <select class="filter-select" data-filter="status" aria-label="Filter by status">
+                        <option value="">All statuses</option>
+                        <option value="Ongoing">Ongoing</option>
+                        <option value="Completed">Completed</option>
+                    </select>
 
-                <label class="category-form-label">
-                    Asset Tag
-                    <input
-                        type="text"
-                        id="maintenanceAssetTag"
-                        placeholder="e.g. HW-005"
-                        required
-                    >
+                    <button type="button" class="primary-button" id="addButton">
+                        <i class="bi bi-plus-lg"></i> Add Record
+                    </button>
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Asset Tag</th>
+                                <th>Hardware</th>
+                                <th>Issue Description</th>
+                                <th>Date</th>
+                                <th>Repair Cost</th>
+                                <th>Status</th>
+                                <th class="align-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recordBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="table-footer">
+                    <p id="summary">Showing 0 of 0</p>
+
+                    <div class="pagination">
+                        <select class="page-size" id="pageSize" aria-label="Rows per page">
+                            <option value="10">10 / page</option>
+                            <option value="20">20 / page</option>
+                            <option value="50">50 / page</option>
+                        </select>
+                        <button type="button" class="page-button" id="prevPage" aria-label="Previous page">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <span class="page-label" id="pageLabel">1 / 1</span>
+                        <button type="button" class="page-button" id="nextPage" aria-label="Next page">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+    </main>
+
+    
+    <dialog class="modal" id="formDialog" aria-labelledby="formTitle">
+        <form id="recordForm" class="modal-body">
+            <div class="modal-header">
+                <h2 id="formTitle">Add Maintenance Record</h2>
+                <button type="button" class="close-button" data-close aria-label="Close">×</button>
+            </div>
+
+            <div class="form-grid">
+                <label class="field full">Hardware
+                    <select name="tag" id="hardwareSelect" required></select>
                 </label>
-
-                <label class="category-form-label">
-                    Hardware Name
-                    <input
-                        type="text"
-                        id="maintenanceHardware"
-                        placeholder="e.g. Laptop"
-                        required
-                    >
+                <label class="field">Maintenance Date
+                    <input type="date" name="date" required>
                 </label>
-
-                <label class="category-form-label">
-                    Maintenance Date
-                    <input
-                        type="date"
-                        id="maintenanceDate"
-                        required
-                    >
+                <label class="field">Repair Cost (₱)
+                    <input type="number" name="cost" min="0" step="0.01" value="0" required>
                 </label>
-
-                <label class="category-form-label">
-                    Repair Cost (₱)
-                    <input
-                        type="number"
-                        id="maintenanceCost"
-                        min="0"
-                        step="0.01"
-                        value="0"
-                        required
-                    >
-                </label>
-
-                <label class="category-form-label">
-                    Maintenance Status
-                    <select id="maintenanceStatus" required>
+                <label class="field full">Status
+                    <select name="status" required>
                         <option value="Ongoing">Ongoing</option>
                         <option value="Completed">Completed</option>
                     </select>
                 </label>
-
-                <label class="category-form-label">
-                    Issue Description
-                    <textarea
-                        id="maintenanceIssue"
-                        rows="3"
-                        placeholder="Describe the hardware problem..."
-                        required
-                    ></textarea>
+                <label class="field full">Issue Description
+                    <textarea name="issue" rows="2" required placeholder="Describe the hardware problem"></textarea>
                 </label>
-
-                <label class="category-form-label">
-                    Action Taken
-                    <textarea
-                        id="maintenanceAction"
-                        rows="3"
-                        placeholder="Describe the repair performed..."
-                    ></textarea>
+                <label class="field full">Action Taken
+                    <textarea name="action" rows="2" placeholder="Describe the repair performed"></textarea>
                 </label>
-
             </div>
+
+            <p class="form-error" id="formError" role="alert" hidden></p>
 
             <div class="modal-actions">
-                <button
-                    type="button"
-                    class="secondary-button"
-                    onclick="closeMaintenanceModal()"
-                >
-                    Cancel
-                </button>
+                <button type="button" class="secondary-button" data-close>Cancel</button>
+                <button type="submit" class="primary-button" id="formSubmit">Save Record</button>
+            </div>
+        </form>
+    </dialog>
 
-                <button type="submit" class="primary-button">
-                    Save Record
+    
+    <dialog class="modal" id="viewDialog" aria-labelledby="viewTitle">
+        <div class="modal-body">
+            <div class="modal-header">
+                <h2 id="viewTitle">Maintenance Details</h2>
+                <button type="button" class="close-button" data-close aria-label="Close">×</button>
+            </div>
+            <dl class="detail-list" id="detailList"></dl>
+            <div class="modal-actions">
+                <button type="button" class="secondary-button" data-close>Close</button>
+                <button type="button" class="primary-button" id="viewEdit">
+                    <i class="bi bi-pencil"></i> Edit
                 </button>
             </div>
+        </div>
+    </dialog>
 
+    
+    <dialog class="modal" id="historyDialog" aria-labelledby="historyTitle">
+        <div class="modal-body">
+            <div class="modal-header">
+                <h2 id="historyTitle">Maintenance History</h2>
+                <button type="button" class="close-button" data-close aria-label="Close">×</button>
+            </div>
+            <ol class="history-list" id="historyList"></ol>
+            <div class="modal-actions">
+                <button type="button" class="secondary-button" data-close>Close</button>
+            </div>
+        </div>
+    </dialog>
+
+    
+    <dialog class="modal" id="completeDialog" aria-labelledby="completeTitle">
+        <form id="completeForm" class="modal-body">
+            <div class="modal-header">
+                <h2 id="completeTitle">Mark as completed</h2>
+                <button type="button" class="close-button" data-close aria-label="Close">×</button>
+            </div>
+            <p class="dialog-text" id="completeText"></p>
+            <div class="form-grid">
+                <label class="field full">Final Repair Cost (₱)
+                    <input type="number" name="cost" min="0" step="0.01" required>
+                </label>
+                <label class="field full">Action Taken
+                    <textarea name="action" rows="3" placeholder="Describe the repair performed"></textarea>
+                </label>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="secondary-button" data-close>Cancel</button>
+                <button type="submit" class="primary-button">Mark Completed</button>
+            </div>
         </form>
-    </div>
-</div>
+    </dialog>
 
-<script>
-const maintenanceBody = document.getElementById("maintenanceTableBody");
-const maintenanceModal = document.getElementById("maintenanceModal");
-const maintenanceForm = document.getElementById("maintenanceForm");
+    <script>
+    (() => {
+        
+        const items = <?= json_encode($records, $jsonFlags) ?>;
+        const CATALOG = <?= json_encode($catalog, $jsonFlags) ?>;
 
-function openMaintenanceModal() {
-    maintenanceForm.reset();
-    maintenanceModal.style.display = "flex";
-}
+        items.forEach((item, index) => { item.id = index + 1; });
+        let nextId = items.length + 1;
 
-function closeMaintenanceModal() {
-    maintenanceModal.style.display = "none";
-}
+        const state = {
+            search: "", status: "", page: 1, perPage: 10,
+            editingId: null, // record being edited, or null when adding
+            targetId: null   // record shown in the view / complete dialogs
+        };
 
-function escapeHTML(value) {
-    return String(value).replace(/[&<>"']/g, function(character) {
-        return {
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            '"': "&quot;",
-            "'": "&#039;"
-        }[character];
-    });
-}
+        
+        const $ = (id) => document.getElementById(id);
+        const body = $("recordBody");
+        const form = $("recordForm");
+        const dialogs = {
+            form: $("formDialog"), view: $("viewDialog"),
+            history: $("historyDialog"), complete: $("completeDialog")
+        };
 
-function formatPeso(amount) {
-    return Number(amount).toLocaleString("en-PH", {
-        style: "currency",
-        currency: "PHP"
-    });
-}
+        const esc = (value) => String(value).replace(/[&<>"']/g,
+            (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-function completeMaintenance(button) {
-    const row = button.closest("tr");
+        const today = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local time
+        const formatDate = (iso) => new Date(`${iso}T00:00:00`)
+            .toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        const peso = (amount) => Number(amount)
+            .toLocaleString("en-PH", { style: "currency", currency: "PHP" });
 
-    if (!confirm("Mark this maintenance record as completed?")) {
-        return;
-    }
+        const byId = (id) => items.find((item) => item.id === Number(id));
+        const badge = (item) => `<span class="badge ${item.status.toLowerCase()}">${esc(item.status)}</span>`;
 
-    row.cells[5].innerHTML =
-        '<span class="status-badge available">Completed</span>';
+        const matches = (item) => {
+            const query = state.search.trim().toLowerCase();
+            const haystack = [item.tag, CATALOG[item.tag], item.issue].join(" ").toLowerCase();
 
-    row.cells[6].innerHTML = "<span>—</span>";
+            return (!query || haystack.includes(query))
+                && (!state.status || item.status === state.status);
+        };
 
-    updateMaintenanceSummary();
-    filterMaintenance();
-}
+        
+        const actionButton = (action, id, icon, label) =>
+            `<button type="button" class="icon-button" data-action="${action}" data-id="${id}" aria-label="${label}"><i class="bi ${icon}"></i></button>`;
 
-maintenanceForm.addEventListener("submit", function(event) {
-    event.preventDefault();
+        const rowHtml = (item) => `
+            <tr>
+                <td class="asset-tag">${esc(item.tag)}</td>
+                <td class="primary-cell">${esc(CATALOG[item.tag])}</td>
+                <td>${esc(item.issue)}</td>
+                <td>${formatDate(item.date)}</td>
+                <td class="cost-cell">${peso(item.cost)}</td>
+                <td>${badge(item)}</td>
+                <td>
+                    <div class="row-actions">
+                        ${actionButton("view", item.id, "bi-eye", `View ${esc(item.tag)}`)}
+                        ${actionButton("history", item.id, "bi-clock-history", `History of ${esc(item.tag)}`)}
+                        ${actionButton("edit", item.id, "bi-pencil", `Edit ${esc(item.tag)}`)}
+                        ${item.status === "Ongoing" ? actionButton("complete", item.id, "bi-check-circle", `Complete ${esc(item.tag)}`) : ""}
+                    </div>
+                </td>
+            </tr>`;
 
-    const assetTag = document.getElementById("maintenanceAssetTag").value.trim();
-    const hardware = document.getElementById("maintenanceHardware").value.trim();
-    const issue = document.getElementById("maintenanceIssue").value.trim();
-    const date = document.getElementById("maintenanceDate").value;
-    const cost = Number(document.getElementById("maintenanceCost").value);
-    const status = document.getElementById("maintenanceStatus").value;
-    const action = document.getElementById("maintenanceAction").value.trim();
+        function renderStats() {
+            const ongoing = items.filter((item) => item.status === "Ongoing").length;
 
-    if (!assetTag || !hardware || !issue || !date || cost < 0 || !Number.isFinite(cost)) {
-        alert("Please enter valid maintenance details.");
-        return;
-    }
+            $("statTotal").textContent = items.length;
+            $("statOngoing").textContent = ongoing;
+            $("statCompleted").textContent = items.length - ongoing;
+            $("statCost").textContent = peso(items.reduce((sum, item) => sum + item.cost, 0));
+        }
 
-    const rows = Array.from(maintenanceBody.querySelectorAll("tr"));
+        function render() {
+            const rows = items.filter(matches);
+            const pages = Math.max(1, Math.ceil(rows.length / state.perPage));
+            state.page = Math.min(state.page, pages);
 
-    const duplicate = rows.some(row =>
-        row.cells[0].textContent.trim().toLowerCase() === assetTag.toLowerCase() &&
-        row.cells[5].textContent.trim() === "Ongoing"
-    );
+            const start = (state.page - 1) * state.perPage;
+            const visible = rows.slice(start, start + state.perPage);
 
-    if (duplicate) {
-        alert("This hardware already has an ongoing maintenance record.");
-        return;
-    }
+            body.innerHTML = visible.length
+                ? visible.map(rowHtml).join("")
+                : `<tr><td colspan="7" class="empty-message">No maintenance records found.</td></tr>`;
 
-    const row = document.createElement("tr");
+            $("summary").textContent = rows.length
+                ? `Showing ${start + 1}–${start + visible.length} of ${rows.length}`
+                : "Showing 0 of 0";
+            $("pageLabel").textContent = `${state.page} / ${pages}`;
+            $("prevPage").disabled = state.page <= 1;
+            $("nextPage").disabled = state.page >= pages;
 
-    row.innerHTML = `
-        <td>${escapeHTML(assetTag)}</td>
-        <td>${escapeHTML(hardware)}</td>
-        <td title="${escapeHTML(action)}">${escapeHTML(issue)}</td>
-        <td>${escapeHTML(date)}</td>
-        <td data-cost="${cost}">${formatPeso(cost)}</td>
-        <td>
-            <span class="status-badge ${status === "Ongoing" ? "maintenance" : "available"}">
-                ${status}
-            </span>
-        </td>
-        <td>
-            ${status === "Ongoing"
-                ? '<button class="text-button" onclick="completeMaintenance(this)">Complete</button>'
-                : '<span>—</span>'}
-        </td>
-    `;
+            renderStats();
+        }
 
-    maintenanceBody.prepend(row);
+        
+        $("toolbar").addEventListener("input", (event) => {
+            const key = event.target.dataset.filter;
+            if (!key) return;
+            state[key] = event.target.value;
+            state.page = 1;
+            render();
+        });
 
-    maintenanceForm.reset();
-    closeMaintenanceModal();
-    updateMaintenanceSummary();
-    filterMaintenance();
+        $("pageSize").addEventListener("change", (event) => {
+            state.perPage = Number(event.target.value);
+            state.page = 1;
+            render();
+        });
 
-    alert("Maintenance record added for this session.");
-});
+        $("prevPage").addEventListener("click", () => { state.page--; render(); });
+        $("nextPage").addEventListener("click", () => { state.page++; render(); });
 
-function filterMaintenance() {
-    const search = document.getElementById("maintenanceSearch").value.toLowerCase();
-    const statusFilter = document.getElementById("maintenanceStatusFilter").value;
-    const rows = maintenanceBody.querySelectorAll("tr");
+        
+        body.addEventListener("click", (event) => {
+            const button = event.target.closest("[data-action]");
+            if (!button) return;
 
-    let visibleCount = 0;
+            const { action, id } = button.dataset;
+            if (action === "view")     openView(id);
+            if (action === "history")  openHistory(id);
+            if (action === "edit")     openForm(id);
+            if (action === "complete") openComplete(id);
+        });
 
-    rows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        const status = row.cells[5].textContent.trim();
+        
+        function openForm(id = null) {
+            state.editingId = id ? Number(id) : null;
+            const select = $("hardwareSelect");
+            form.reset();
+            $("formError").hidden = true;
+            $("formTitle").textContent = id ? "Edit Maintenance Record" : "Add Maintenance Record";
+            $("formSubmit").textContent = id ? "Save Changes" : "Save Record";
 
-        const matchesSearch = text.includes(search);
-        const matchesStatus = statusFilter === "all" || status === statusFilter;
-        const show = matchesSearch && matchesStatus;
+            if (id) {
 
-        row.style.display = show ? "" : "none";
+                const item = byId(id);
+                select.innerHTML = `<option value="${esc(item.tag)}">${esc(item.tag)} · ${esc(CATALOG[item.tag])}</option>`;
+                select.disabled = true;
+                form.elements.date.value = item.date;
+                form.elements.cost.value = item.cost;
+                form.elements.status.value = item.status;
+                form.elements.issue.value = item.issue;
+                form.elements.action.value = item.action;
+            } else {
 
-        if (show) visibleCount++;
-    });
+                const busy = new Set(items.filter((item) => item.status === "Ongoing").map((item) => item.tag));
+                select.innerHTML = `<option value="">Select hardware</option>` +
+                    Object.entries(CATALOG)
+                        .filter(([tag]) => !busy.has(tag))
+                        .map(([tag, name]) => `<option value="${esc(tag)}">${esc(tag)} · ${esc(name)}</option>`)
+                        .join("");
+                select.disabled = false;
+                form.elements.date.value = today();
+            }
 
-    document.getElementById("maintenanceEmptyMessage").style.display =
-        visibleCount === 0 ? "block" : "none";
-}
+            dialogs.view.close();
+            dialogs.form.showModal();
+        }
 
-function updateMaintenanceSummary() {
-    const rows = Array.from(maintenanceBody.querySelectorAll("tr"));
+        $("addButton").addEventListener("click", () => openForm());
 
-    let ongoing = 0;
-    let completed = 0;
-    let totalCost = 0;
+        form.addEventListener("submit", (event) => {
+            event.preventDefault();
 
-    rows.forEach(row => {
-        const status = row.cells[5].textContent.trim();
+            const data = {
+                date: form.elements.date.value,
+                cost: Number(form.elements.cost.value),
+                status: form.elements.status.value,
+                issue: form.elements.issue.value.trim(),
+                action: form.elements.action.value.trim()
+            };
 
-        if (status === "Ongoing") ongoing++;
-        if (status === "Completed") completed++;
+            if (state.editingId) {
+                const item = byId(state.editingId);
+                const clash = data.status === "Ongoing" &&
+                    items.some((other) => other !== item && other.tag === item.tag && other.status === "Ongoing");
 
-        totalCost += Number(row.cells[4].dataset.cost || 0);
-    });
+                if (clash) {
+                    $("formError").textContent = "This hardware already has an ongoing repair.";
+                    $("formError").hidden = false;
+                    return;
+                }
+                Object.assign(item, data);
+            } else {
+                items.unshift({ id: nextId++, tag: form.elements.tag.value, ...data });
+                state.page = 1;
+            }
 
-    document.getElementById("totalRecords").textContent = rows.length;
-    document.getElementById("ongoingRecords").textContent = ongoing;
-    document.getElementById("completedRecords").textContent = completed;
-    document.getElementById("totalRepairCost").textContent = formatPeso(totalCost);
-}
+            dialogs.form.close();
+            render();
+        });
 
-maintenanceModal.addEventListener("click", function(event) {
-    if (event.target === maintenanceModal) {
-        closeMaintenanceModal();
-    }
-});
+        
+        function openView(id) {
+            const item = byId(id);
+            state.targetId = item.id;
 
-updateMaintenanceSummary();
-</script>
+            const fields = [
+                ["Asset tag", esc(item.tag)],
+                ["Hardware", esc(CATALOG[item.tag])],
+                ["Date", formatDate(item.date)],
+                ["Repair cost", peso(item.cost)],
+                ["Issue", esc(item.issue)],
+                ["Status", badge(item)],
+                ["Action taken", esc(item.action || "—")]
+            ];
+
+            $("detailList").innerHTML = fields
+                .map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`)
+                .join("");
+
+            dialogs.view.showModal();
+        }
+
+        $("viewEdit").addEventListener("click", () => openForm(state.targetId));
+
+        
+        function openHistory(id) {
+            const { tag } = byId(id);
+            const records = items
+                .filter((item) => item.tag === tag)
+                .sort((a, b) => b.date.localeCompare(a.date));
+
+            $("historyTitle").textContent = `${tag} · ${CATALOG[tag]}`;
+            $("historyList").innerHTML = records.map((item) => `
+                <li>
+                    <div>
+                        <strong>${esc(item.issue)}</strong>
+                        <span class="period">${formatDate(item.date)} · ${peso(item.cost)}</span>
+                    </div>
+                    ${badge(item)}
+                </li>`).join("");
+
+            dialogs.history.showModal();
+        }
+
+        
+        function openComplete(id) {
+            const item = byId(id);
+            state.targetId = item.id;
+
+            $("completeText").textContent = `${CATALOG[item.tag]} (${item.tag}) — ${item.issue}.`;
+            $("completeForm").elements.cost.value = item.cost;
+            $("completeForm").elements.action.value = item.action;
+
+            dialogs.complete.showModal();
+        }
+
+        $("completeForm").addEventListener("submit", (event) => {
+            event.preventDefault();
+
+            Object.assign(byId(state.targetId), {
+                status: "Completed",
+                cost: Number(event.target.elements.cost.value),
+                action: event.target.elements.action.value.trim()
+            });
+
+            dialogs.complete.close();
+            render();
+        });
+
+        
+        document.addEventListener("click", (event) => {
+            const closer = event.target.closest("[data-close]");
+            if (closer) closer.closest("dialog").close();
+            if (event.target instanceof HTMLDialogElement) event.target.close();
+        });
+
+        render();
+    })();
+    </script>
+
 </body>
 </html>

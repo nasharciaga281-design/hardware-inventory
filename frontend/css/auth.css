@@ -1,0 +1,111 @@
+
+
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+    background: #f5f7fb;
+}
+
+.login-container {
+    width: 100%;
+    max-width: 410px;
+    padding: 36px;
+    background: #fff;
+    border: 1px solid #e5e9f0;
+    border-radius: 12px;
+}
+
+.login-container .brand-icon {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 22px;
+    border-radius: 10px;
+    background: #172554;
+    color: #fff;
+    font-size: 22px;
+    font-weight: bold;
+}
+
+.login-container h1 {
+    margin-bottom: 8px;
+    font-size: 25px;
+    letter-spacing: -.5px;
+}
+
+.login-subtitle {
+    margin-bottom: 28px;
+    color: #64748b;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.form-group { margin-bottom: 18px; }
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px 13px;
+    border: 1px solid #d8dee9;
+    border-radius: 7px;
+    outline: none;
+    font-size: 14px;
+}
+
+.form-group input:focus {
+    border-color: #334b91;
+    box-shadow: 0 0 0 3px #334b911a;
+}
+
+.login-options {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 22px;
+    font-size: 12px;
+}
+
+.remember-option { display: flex; align-items: center; gap: 6px; }
+
+.login-options a,
+.register-link a {
+    color: #304b91;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.login-button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 7px;
+    background: #172554;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.login-button:hover { background: #253b75; }
+
+.register-link {
+    margin-top: 24px;
+    text-align: center;
+    color: #64748b;
+    font-size: 13px;
+}
+
+@media (max-width: 480px) {
+    .login-container { padding: 26px 22px; }
+}

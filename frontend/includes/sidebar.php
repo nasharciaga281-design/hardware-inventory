@@ -1,58 +1,45 @@
+<?php
 
+$currentPage = basename($_SERVER['PHP_SELF']);
+
+
+$menuItems = [
+    ["dashboard.php",   "bi-grid-1x2",        "Dashboard"],
+    ["hardware.php",    "bi-boxes",           "Hardware Inventory"],
+    ["categories.php",  "bi-tags",            "Categories"],
+    ["locations.php",   "bi-geo-alt",         "Locations"],
+    ["assignments.php", "bi-clipboard-check", "Assignments"],
+    ["maintenance.php", "bi-wrench",          "Maintenance"],
+    ["users.php",       "bi-people",          "User Management"],
+];
+?>
 <aside class="sidebar">
     <div class="sidebar-brand">
-        <div class="brand-icon">H</div>
+        <div class="brand-icon"><i class="bi bi-hdd-stack"></i></div>
         <div class="brand-title">
-            <h2>Hardware</h2>
-            <span>Management System</span>
+            <h2>HMS</h2>
+            <span>Hardware Management</span>
         </div>
     </div>
 
-    <p class="sidebar-label">MAIN MENU</p>
+    <p class="sidebar-label">Menu</p>
 
     <nav class="sidebar-nav">
-        <a href="dashboard.php" class="nav-link" >
-            <span>▦</span> Dashboard
-        </a>
-
-        <a href="hardware.php" class="nav-link">
-            <span>▤</span> Hardware Inventory
-        </a>
-
-        <a href="categories.php" class="nav-link">
-            <span>▧</span> Categories
-        </a>
-
-        <a href="locations.php" class="nav-link">
-            <span>⌖</span> Locations
-        </a>
-
-        <a href="assignments.php" class="nav-link">
-            <span>⇄</span> Assignments
-        </a>
-
-        <a href="maintenance.php" class="nav-link">
-            <span>⚒</span> Maintenance
-        </a>
-    </nav>
-
-    <p class="sidebar-label">SYSTEM</p>
-
-    <nav class="sidebar-nav">
-        <a href="users.php" class="nav-link">
-            <span>♙</span> User Management
-        </a>
-
-        <a href="settings.php" class="nav-link">
-            <span>⚙</span> Settings
-        </a>
+        <?php foreach ($menuItems as [$file, $icon, $label]): ?>
+            <?php $isActive = ($currentPage === $file); ?>
+            <a href="<?= $file ?>"
+               class="nav-link<?= $isActive ? ' active' : '' ?>"
+               title="<?= $label ?>"
+               <?= $isActive ? 'aria-current="page"' : '' ?>>
+                <i class="bi <?= $icon ?>"></i><span><?= $label ?></span>
+            </a>
+        <?php endforeach; ?>
     </nav>
 
     <div class="sidebar-bottom">
-        <div class="user-avatar">A</div>
-        <div class="sidebar-user">
-            <strong>Admin User</strong>
-            <span>Administrator</span>
-        </div>
+        
+        <a href="../account/login.php" class="nav-link" title="Logout">
+            <i class="bi bi-box-arrow-left"></i><span>Logout</span>
+        </a>
     </div>
 </aside>
