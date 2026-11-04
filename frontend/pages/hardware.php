@@ -1,5 +1,5 @@
 <?php
-
+require_once __DIR__ . '/../config/database.php';
 $pageTitle       = "Hardware Inventory";
 $pageDescription = "Browse and manage all hardware assets";
 $pageStyles      = ["hardware"];
@@ -22,30 +22,28 @@ function hw(string $tag, string $name, string $category, string $brand, string $
                    "purchaseDate", "purchaseCost", "description", "condition", "status");
 }
 
-$hardware = [
-    hw("LAP-0001", "Dell Latitude 5440",        "Laptops",     "Dell",     "Latitude 5440",       "Finance Department",    "Good", "Assigned"),
-    hw("LAP-0002", "Lenovo ThinkPad E14",       "Laptops",     "Lenovo",   "ThinkPad E14 Gen 5",  "IT Office",             "Good", "Available"),
-    hw("LAP-0003", "HP ProBook 450 G10",        "Laptops",     "HP",       "ProBook 450 G10",     "IT Office",             "New",  "Available"),
-    hw("LAP-0004", "Apple MacBook Air M2",      "Laptops",     "Apple",    "MacBook Air M2",      "Conference Room",       "Good", "Assigned"),
-    hw("LAP-0005", "Acer TravelMate P2",        "Laptops",     "Acer",     "TravelMate P214",     "IT Office",             "Fair", "Under Maintenance"),
-    hw("DSK-0001", "Dell OptiPlex 7010",        "Desktops",    "Dell",     "OptiPlex 7010",       "Computer Laboratory 1", "Good", "Available"),
-    hw("DSK-0002", "Dell OptiPlex 7010",        "Desktops",    "Dell",     "OptiPlex 7010",       "Computer Laboratory 1", "Good", "Available"),
-    hw("DSK-0003", "HP EliteDesk 800 G6",       "Desktops",    "HP",       "EliteDesk 800 G6",    "Finance Department",    "Fair", "Assigned"),
-    hw("DSK-0004", "Lenovo ThinkCentre M70q",   "Desktops",    "Lenovo",   "ThinkCentre M70q",    "Computer Laboratory 1", "New",  "Available"),
-    hw("MON-0001", "Dell P2422H Monitor",       "Monitors",    "Dell",     "P2422H",              "Computer Laboratory 1", "Good", "Available"),
-    hw("MON-0002", "LG 24MK430H Monitor",       "Monitors",    "LG",       "24MK430H",            "IT Office",             "Good", "Available"),
-    hw("MON-0003", "Samsung S24R350 Monitor",   "Monitors",    "Samsung",  "S24R350",             "Finance Department",    "Fair", "Available"),
-    hw("PRN-0001", "HP LaserJet Pro M404dn",    "Printers",    "HP",       "LaserJet Pro M404dn", "Finance Department",    "Good", "Available"),
-    hw("PRN-0002", "Brother HL-L2350DW",        "Printers",    "Brother",  "HL-L2350DW",          "IT Office",             "Poor", "Under Maintenance"),
-    hw("PRN-0003", "Epson EcoTank L3250",       "Printers",    "Epson",    "EcoTank L3250",       "Computer Laboratory 1", "New",  "Available"),
-    hw("NET-0001", "Cisco Catalyst 2960 Switch","Networking",  "Cisco",    "Catalyst 2960",       "Server Room",           "Good", "Available"),
-    hw("NET-0002", "Ubiquiti UniFi U6 Lite",    "Networking",  "Ubiquiti", "UniFi U6 Lite",       "Conference Room",       "Good", "Available"),
-    hw("NET-0003", "MikroTik hEX RB750Gr3",     "Networking",  "MikroTik", "hEX RB750Gr3",        "Server Room",           "New",  "Available"),
-    hw("PER-0001", "Epson EB-X51 Projector",    "Peripherals", "Epson",    "EB-X51",              "Conference Room",       "Fair", "Available"),
-    hw("PER-0002", "Logitech C920 Webcam",      "Peripherals", "Logitech", "C920",                "Conference Room",       "New",  "Available"),
-    hw("PER-0003", "Logitech MX Keys Keyboard", "Peripherals", "Logitech", "MX Keys",             "Finance Department",    "Good", "Assigned"),
-];
+$sql = "SELECT
+            h.asset_tag AS tag,
+            h.hardware_name AS name,
+            c.category_name AS category,
+            h.brand,
+            h.model,
+            l.location_name AS location,
+            h.condition_status AS `condition`,
+            h.status,
+            h.serial_number AS serial,
+            h.purchase_date AS purchaseDate,
+            h.purchase_cost AS purchaseCost,
+            h.description
+        FROM hardware h
+        INNER JOIN categories c
+            ON h.category_id = c.category_id
+        INNER JOIN locations l
+            ON h.location_id = l.location_id";
 
+$stmt = $pdo->query($sql);
+
+$hardware = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 function e(string $value): string { return htmlspecialchars($value, ENT_QUOTES, "UTF-8"); }
 
@@ -370,32 +368,39 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
 
         $("addButton").addEventListener("click", () => openForm());
 
-        form.addEventListener("submit", (event) => {
+        form.addEventListener("submit", async (event) => {
             event.preventDefault();
 
-            const data = Object.fromEntries(
-                Array.from(new FormData(form), ([key, value]) => [key, value.trim()])
-            );
-            if (state.editingTag) data.status = find(state.editingTag).status;
-
-            const duplicate = items.some((item) =>
-                item.tag.toLowerCase() === data.tag.toLowerCase() && item.tag !== state.editingTag);
-
-            if (duplicate) {
-                $("formError").textContent = "That asset tag already exists.";
+            // Editing is not connected yet
+            if (state.editingTag) {
+                $("formError").textContent =
+                    "Editing is not connected yet. Please use Add Hardware for now.";
                 $("formError").hidden = false;
                 return;
             }
 
-            if (state.editingTag) {
-                items[items.indexOf(find(state.editingTag))] = data;
-            } else {
-                items.unshift(data);
-                state.page = 1;
-            }
+            const formData = new FormData(form);
 
-            formDialog.close();
-            render();
+            try {
+                const response = await fetch("save_hardware.php", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    throw new Error(result.message || "Unable to save hardware.");
+                }
+
+                // Close the form and reload database records
+                formDialog.close();
+                window.location.reload();
+
+            } catch (error) {
+                $("formError").textContent = error.message;
+                $("formError").hidden = false;
+            }
         });
 
         
