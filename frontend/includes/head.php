@@ -17,10 +17,10 @@ $pageStyles = $pageStyles ?? [];
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
 
-<link rel="stylesheet" href="../css/style.css">
-<link rel="stylesheet" href="../css/components.css">
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="../assets/css/components.css">
 
 
 <?php foreach ($pageStyles as $style): ?>
-<link rel="stylesheet" href="../css/<?= htmlspecialchars($style) ?>.css">
+<link rel="stylesheet" href="../assets/css/<?= htmlspecialchars($style) ?>.css">
 <?php endforeach; ?>

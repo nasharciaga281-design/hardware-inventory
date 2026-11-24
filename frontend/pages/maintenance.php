@@ -1,45 +1,29 @@
 <?php
+require_once __DIR__ . '/../../backend/middleware/auth.php';
+auth_require_user();
+$canManageMaintenance = auth_has_role([HIMS_ROLE_ADMIN, HIMS_ROLE_INVENTORY_MANAGER, HIMS_ROLE_TECHNICIAN]);
 
 $pageTitle       = "Maintenance";
 $pageDescription = "Repairs and service records";
 $pageStyles      = ["maintenance"];
 
 
-$catalog = [
-    "LAP-0001" => "Dell Latitude 5440",
-    "LAP-0002" => "Lenovo ThinkPad E14",
-    "LAP-0003" => "HP ProBook 450 G10",
-    "LAP-0004" => "Apple MacBook Air M2",
-    "LAP-0005" => "Acer TravelMate P2",
-    "DSK-0001" => "Dell OptiPlex 7010",
-    "DSK-0002" => "Dell OptiPlex 7010",
-    "DSK-0003" => "HP EliteDesk 800 G6",
-    "DSK-0004" => "Lenovo ThinkCentre M70q",
-    "MON-0001" => "Dell P2422H Monitor",
-    "MON-0002" => "LG 27UL500 Monitor",
-    "MON-0003" => "Samsung S24R350",
-    "PRN-0001" => "HP LaserJet Pro M404dn",
-    "PRN-0002" => "Brother HL-L2350DW",
-    "PRN-0003" => "Epson EcoTank L3250",
-    "NET-0001" => "Cisco Catalyst 2960 Switch",
-    "NET-0002" => "Ubiquiti UniFi U6 Lite",
-    "NET-0003" => "MikroTik hEX RB750Gr3",
-    "PER-0001" => "Epson EB-X51 Projector",
-    "PER-0002" => "Logitech C920 Webcam",
-    "PER-0003" => "Logitech MX Keys Keyboard",
-];
+$catalog = $pdo->query('SELECT asset_tag, hardware_name FROM hardware ORDER BY asset_tag')
+    ->fetchAll(PDO::FETCH_KEY_PAIR);
 
-function record(string $tag, string $issue, string $date, float $cost, string $status, string $action = ""): array {
-    return compact("tag", "issue", "date", "cost", "status", "action");
-}
-
-$records = [
-    record("LAP-0005", "Battery does not hold charge", "2026-10-20", 3200, "Ongoing"),
-    record("PRN-0002", "Paper jam and roller wear",    "2026-10-24", 1450, "Ongoing"),
-    record("MON-0003", "Flickering display",           "2026-08-14", 2100, "Completed"),
-    record("DSK-0001", "Slow boot, failing HDD",       "2026-07-02", 2850, "Completed"),
-    record("NET-0001", "Port 12 not linking",          "2026-09-18", 0,    "Completed"),
-];
+$records = array_map(static function (array $row): array {
+    $row['id'] = (int) $row['id'];
+    $row['cost'] = (float) $row['cost'];
+    return $row;
+}, $pdo->query(
+    "SELECT m.maintenance_id AS id, h.asset_tag AS tag,
+            m.issue_description AS issue, m.maintenance_date AS `date`,
+            m.repair_cost AS cost, m.status,
+            COALESCE(m.action_taken, '') AS `action`
+     FROM maintenance m
+     INNER JOIN hardware h ON h.hardware_id = m.hardware_id
+     ORDER BY m.maintenance_date DESC, m.maintenance_id DESC"
+)->fetchAll(PDO::FETCH_ASSOC));
 
 $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE;
 ?>
@@ -47,6 +31,7 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
 <html lang="en">
 <head>
     <?php include "../includes/head.php"; ?>
+    <meta name="csrf-token" content="<?= htmlspecialchars(auth_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
 </head>
 <body class="dashboard-page">
 
@@ -106,9 +91,11 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
                         <option value="Completed">Completed</option>
                     </select>
 
+                    <?php if ($canManageMaintenance): ?>
                     <button type="button" class="primary-button" id="addButton">
                         <i class="bi bi-plus-lg"></i> Add Record
                     </button>
+                    <?php endif; ?>
                 </div>
 
                 <div class="table-container">
@@ -202,9 +189,11 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
             <dl class="detail-list" id="detailList"></dl>
             <div class="modal-actions">
                 <button type="button" class="secondary-button" data-close>Close</button>
+                <?php if ($canManageMaintenance): ?>
                 <button type="button" class="primary-button" id="viewEdit">
                     <i class="bi bi-pencil"></i> Edit
                 </button>
+                <?php endif; ?>
             </div>
         </div>
     </dialog>
@@ -249,11 +238,23 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
     <script>
     (() => {
         
+        const canManage = <?= json_encode($canManageMaintenance) ?>;
         const items = <?= json_encode($records, $jsonFlags) ?>;
-        const CATALOG = <?= json_encode($catalog, $jsonFlags) ?>;
+        const CATALOG = <?= json_encode($catalog, $jsonFlags | JSON_FORCE_OBJECT) ?>;
 
-        items.forEach((item, index) => { item.id = index + 1; });
-        let nextId = items.length + 1;
+        const csrf = () => document.querySelector('meta[name="csrf-token"]').content;
+
+        async function send(url, data) {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "X-CSRF-Token": csrf() },
+                body: data
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || "Something went wrong.");
+            }
+        }
 
         const state = {
             search: "", status: "", page: 1, perPage: 10,
@@ -306,8 +307,8 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
                     <div class="row-actions">
                         ${actionButton("view", item.id, "bi-eye", `View ${esc(item.tag)}`)}
                         ${actionButton("history", item.id, "bi-clock-history", `History of ${esc(item.tag)}`)}
-                        ${actionButton("edit", item.id, "bi-pencil", `Edit ${esc(item.tag)}`)}
-                        ${item.status === "Ongoing" ? actionButton("complete", item.id, "bi-check-circle", `Complete ${esc(item.tag)}`) : ""}
+                        ${canManage ? actionButton("edit", item.id, "bi-pencil", `Edit ${esc(item.tag)}`) : ""}
+                        ${canManage && item.status === "Ongoing" ? actionButton("complete", item.id, "bi-check-circle", `Complete ${esc(item.tag)}`) : ""}
                     </div>
                 </td>
             </tr>`;
@@ -408,37 +409,22 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
             dialogs.form.showModal();
         }
 
-        $("addButton").addEventListener("click", () => openForm());
+        if ($("addButton")) { $("addButton").addEventListener("click", () => openForm()); }
 
-        form.addEventListener("submit", (event) => {
+        form.addEventListener("submit", async (event) => {
             event.preventDefault();
 
-            const data = {
-                date: form.elements.date.value,
-                cost: Number(form.elements.cost.value),
-                status: form.elements.status.value,
-                issue: form.elements.issue.value.trim(),
-                action: form.elements.action.value.trim()
-            };
+            const data = new FormData(form);
+            if (state.editingId) data.append("id", state.editingId);
 
-            if (state.editingId) {
-                const item = byId(state.editingId);
-                const clash = data.status === "Ongoing" &&
-                    items.some((other) => other !== item && other.tag === item.tag && other.status === "Ongoing");
-
-                if (clash) {
-                    $("formError").textContent = "This hardware already has an ongoing repair.";
-                    $("formError").hidden = false;
-                    return;
-                }
-                Object.assign(item, data);
-            } else {
-                items.unshift({ id: nextId++, tag: form.elements.tag.value, ...data });
-                state.page = 1;
+            try {
+                await send(state.editingId ? "update_maintenance.php" : "save_maintenance.php", data);
+                dialogs.form.close();
+                window.location.reload();
+            } catch (error) {
+                $("formError").textContent = error.message;
+                $("formError").hidden = false;
             }
-
-            dialogs.form.close();
-            render();
         });
 
         
@@ -463,7 +449,7 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
             dialogs.view.showModal();
         }
 
-        $("viewEdit").addEventListener("click", () => openForm(state.targetId));
+        if ($("viewEdit")) { $("viewEdit").addEventListener("click", () => openForm(state.targetId)); }
 
         
         function openHistory(id) {
@@ -497,17 +483,19 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
             dialogs.complete.showModal();
         }
 
-        $("completeForm").addEventListener("submit", (event) => {
+        $("completeForm").addEventListener("submit", async (event) => {
             event.preventDefault();
 
-            Object.assign(byId(state.targetId), {
-                status: "Completed",
-                cost: Number(event.target.elements.cost.value),
-                action: event.target.elements.action.value.trim()
-            });
+            const data = new FormData(event.target);
+            data.append("id", state.targetId);
 
-            dialogs.complete.close();
-            render();
+            try {
+                await send("complete_maintenance.php", data);
+                dialogs.complete.close();
+                window.location.reload();
+            } catch (error) {
+                $("completeText").textContent = error.message;
+            }
         });
 
         

@@ -1,6 +1,6 @@
 <?php
 
-require_once "database.php";
+require_once dirname(__DIR__, 2) . '/backend/config/database.php';
 
 echo "Database connected successfully!";
 

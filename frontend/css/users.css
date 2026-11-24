@@ -221,6 +221,22 @@
     margin-top: 24px;
 }
 
+.user-action:disabled { cursor: wait; opacity: .75; }
+.user-action.is-loading::before {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 7px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    content: "";
+    vertical-align: -2px;
+    animation: user-action-spinner .7s linear infinite;
+}
+
+@keyframes user-action-spinner { to { transform: rotate(360deg); } }
+
 .dialog-text { color: var(--muted); font-size: 14px; line-height: 1.5; }
 
 .danger-button {

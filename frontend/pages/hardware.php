@@ -1,11 +1,13 @@
 <?php
-require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../../backend/middleware/auth.php';
+auth_require_user();
+$canManageHardware = auth_has_role([HIMS_ROLE_ADMIN, HIMS_ROLE_INVENTORY_MANAGER]);
 $pageTitle       = "Hardware Inventory";
 $pageDescription = "Browse and manage all hardware assets";
 $pageStyles      = ["hardware"];
 
-$categories = ["Laptops", "Desktops", "Monitors", "Printers", "Networking", "Peripherals"];
-$locations  = ["Computer Laboratory 1", "Conference Room", "Finance Department", "IT Office", "Server Room"];
+$categories = $pdo->query("SELECT category_name FROM categories ORDER BY category_name")->fetchAll(PDO::FETCH_COLUMN);
+$locations  = $pdo->query("SELECT location_name FROM locations ORDER BY location_name")->fetchAll(PDO::FETCH_COLUMN);
 $conditions = ["New", "Good", "Fair", "Poor"];
 
 
@@ -61,6 +63,7 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
 <html lang="en">
 <head>
     <?php include "../includes/head.php"; ?>
+    <meta name="csrf-token" content="<?= htmlspecialchars(auth_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
 </head>
 <body class="dashboard-page">
 
@@ -99,9 +102,11 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
                         <?= options(array_keys($statuses)) ?>
                     </select>
 
+                    <?php if ($canManageHardware): ?>
                     <button type="button" class="primary-button add-button" id="addButton">
                         <i class="bi bi-plus-lg"></i> Add Hardware
                     </button>
+                    <?php endif; ?>
                 </div>
 
                 
@@ -217,9 +222,11 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
             <dl class="detail-list" id="detailList"></dl>
             <div class="modal-actions">
                 <button type="button" class="secondary-button" data-close>Close</button>
+                <?php if ($canManageHardware): ?>
                 <button type="button" class="primary-button" id="viewEdit">
                     <i class="bi bi-pencil"></i> Edit
                 </button>
+                <?php endif; ?>
             </div>
         </div>
     </dialog>
@@ -242,6 +249,7 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
     <script>
     (() => {
         
+        const canManage = <?= json_encode($canManageHardware) ?>;
         const items = <?= json_encode($hardware, $jsonFlags) ?>;
         const STATUS_CLASS = <?= json_encode($statuses, $jsonFlags) ?>;
 
@@ -294,8 +302,8 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
                 <td>
                     <div class="row-actions">
                         <button type="button" class="icon-button" data-action="view" data-tag="${esc(item.tag)}" aria-label="View ${esc(item.name)}"><i class="bi bi-eye"></i></button>
-                        <button type="button" class="icon-button" data-action="edit" data-tag="${esc(item.tag)}" aria-label="Edit ${esc(item.name)}"><i class="bi bi-pencil"></i></button>
-                        <button type="button" class="icon-button danger" data-action="delete" data-tag="${esc(item.tag)}" aria-label="Delete ${esc(item.name)}"><i class="bi bi-trash"></i></button>
+                        ${canManage ? `<button type="button" class="icon-button" data-action="edit" data-tag="${esc(item.tag)}" aria-label="Edit ${esc(item.name)}"><i class="bi bi-pencil"></i></button>
+                        <button type="button" class="icon-button danger" data-action="delete" data-tag="${esc(item.tag)}" aria-label="Delete ${esc(item.name)}"><i class="bi bi-trash"></i></button>` : ""}
                     </div>
                 </td>
             </tr>`;
@@ -354,6 +362,7 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
             state.editingTag = tag;
             form.reset();
             $("formError").hidden = true;
+            form.elements.tag.readOnly = Boolean(tag);
             $("formTitle").textContent = tag ? "Edit Hardware" : "Add Hardware";
             $("formSubmit").textContent = tag ? "Save Changes" : "Add to List";
 
@@ -366,24 +375,18 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
             formDialog.showModal();
         }
 
-        $("addButton").addEventListener("click", () => openForm());
+        if ($("addButton")) { $("addButton").addEventListener("click", () => openForm()); }
 
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
 
-            // Editing is not connected yet
-            if (state.editingTag) {
-                $("formError").textContent =
-                    "Editing is not connected yet. Please use Add Hardware for now.";
-                $("formError").hidden = false;
-                return;
-            }
-
             const formData = new FormData(form);
+            const endpoint = state.editingTag ? "update_hardware.php" : "save_hardware.php";
 
             try {
-                const response = await fetch("save_hardware.php", {
+                const response = await fetch(endpoint, {
                     method: "POST",
+                    headers: { "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]').content },
                     body: formData
                 });
 
@@ -429,7 +432,7 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
             viewDialog.showModal();
         }
 
-        $("viewEdit").addEventListener("click", () => openForm(state.targetTag));
+        if ($("viewEdit")) { $("viewEdit").addEventListener("click", () => openForm(state.targetTag)); }
 
         
         function openDelete(tag) {
@@ -439,10 +442,27 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
             deleteDialog.showModal();
         }
 
-        $("deleteConfirm").addEventListener("click", () => {
-            items.splice(items.indexOf(find(state.targetTag)), 1);
-            deleteDialog.close();
-            render();
+        $("deleteConfirm").addEventListener("click", async () => {
+            try {
+                const response = await fetch("delete_hardware.php", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: new URLSearchParams({ tag: state.targetTag })
+                });
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    throw new Error(result.message || "Unable to delete hardware.");
+                }
+
+                deleteDialog.close();
+                window.location.reload();
+            } catch (error) {
+                alert(error.message);
+            }
         });
 
         

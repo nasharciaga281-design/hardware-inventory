@@ -1,16 +1,27 @@
 <?php
+require_once __DIR__ . '/../../backend/middleware/auth.php';
+auth_require_user();
+$canManageLocations = auth_has_role([HIMS_ROLE_ADMIN, HIMS_ROLE_INVENTORY_MANAGER]);
 
 $pageTitle       = "Locations";
 $pageDescription = "Rooms and departments holding hardware";
 $pageStyles      = ["locations"];
 
-$locations = [
-    ["name" => "IT Office",              "room" => "B-101", "description" => "IT department and storage",     "count" => 6],
-    ["name" => "Finance Department",     "room" => "A-204", "description" => "Accounting and payroll",        "count" => 4],
-    ["name" => "Computer Laboratory 1",  "room" => "C-301", "description" => "Main training laboratory",      "count" => 5],
-    ["name" => "Conference Room",        "room" => "A-110", "description" => "Meetings and presentations",    "count" => 4],
-    ["name" => "Server Room",            "room" => "B-005", "description" => "Restricted network infrastructure", "count" => 2],
-];
+$stmt = $pdo->query(
+    "SELECT l.location_id AS id, l.location_name AS name,
+            COALESCE(l.room, '') AS room,
+            COALESCE(l.description, '') AS description,
+            COUNT(h.asset_tag) AS `count`
+     FROM locations l
+     LEFT JOIN hardware h ON h.location_id = l.location_id
+     GROUP BY l.location_id, l.location_name, l.room, l.description
+     ORDER BY l.location_name"
+);
+$locations = array_map(static function (array $row): array {
+    $row['id'] = (int) $row['id'];
+    $row['count'] = (int) $row['count'];
+    return $row;
+}, $stmt->fetchAll(PDO::FETCH_ASSOC));
 
 $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE;
 ?>
@@ -18,6 +29,7 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
 <html lang="en">
 <head>
     <?php include "../includes/head.php"; ?>
+    <meta name="csrf-token" content="<?= htmlspecialchars(auth_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
 </head>
 <body class="dashboard-page">
 
@@ -69,9 +81,11 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
                         <option value="empty">Empty</option>
                     </select>
 
+                    <?php if ($canManageLocations): ?>
                     <button type="button" class="primary-button" id="addButton">
                         <i class="bi bi-plus-lg"></i> Add Location
                     </button>
+                    <?php endif; ?>
                 </div>
 
                 <div class="table-container">
@@ -132,9 +146,11 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
             <dl class="detail-list" id="detailList"></dl>
             <div class="modal-actions">
                 <button type="button" class="secondary-button" data-close>Close</button>
+                <?php if ($canManageLocations): ?>
                 <button type="button" class="primary-button" id="viewEdit">
                     <i class="bi bi-pencil"></i> Edit
                 </button>
+                <?php endif; ?>
             </div>
         </div>
     </dialog>
@@ -157,6 +173,7 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
     <script>
     (() => {
         
+        const canManage = <?= json_encode($canManageLocations) ?>;
         const items = <?= json_encode($locations, $jsonFlags) ?>;
 
         const state = {
@@ -199,8 +216,8 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
                 <td>
                     <div class="row-actions">
                         <button type="button" class="icon-button" data-action="view" data-name="${esc(item.name)}" aria-label="View ${esc(item.name)}"><i class="bi bi-eye"></i></button>
-                        <button type="button" class="icon-button" data-action="edit" data-name="${esc(item.name)}" aria-label="Edit ${esc(item.name)}"><i class="bi bi-pencil"></i></button>
-                        <button type="button" class="icon-button danger" data-action="delete" data-name="${esc(item.name)}" aria-label="Delete ${esc(item.name)}"><i class="bi bi-trash"></i></button>
+                        ${canManage ? `<button type="button" class="icon-button" data-action="edit" data-name="${esc(item.name)}" aria-label="Edit ${esc(item.name)}"><i class="bi bi-pencil"></i></button>
+                        <button type="button" class="icon-button danger" data-action="delete" data-name="${esc(item.name)}" aria-label="Delete ${esc(item.name)}"><i class="bi bi-trash"></i></button>` : ""}
                     </div>
                 </td>
             </tr>`;
@@ -260,34 +277,36 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
             formDialog.showModal();
         }
 
-        $("addButton").addEventListener("click", () => openForm());
+        if ($("addButton")) { $("addButton").addEventListener("click", () => openForm()); }
 
-        form.addEventListener("submit", (event) => {
+        const csrf = () => document.querySelector('meta[name="csrf-token"]').content;
+
+        async function send(url, data) {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "X-CSRF-Token": csrf() },
+                body: data
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || "Something went wrong.");
+            }
+        }
+
+        form.addEventListener("submit", async (event) => {
             event.preventDefault();
 
-            const data = {
-                name: form.elements.name.value.trim(),
-                room: form.elements.room.value.trim(),
-                description: form.elements.description.value.trim()
-            };
+            const data = new FormData(form);
+            if (state.editingName) data.append("id", find(state.editingName).id);
 
-            const duplicate = items.some((item) =>
-                item.name.toLowerCase() === data.name.toLowerCase() && item.name !== state.editingName);
-
-            if (duplicate) {
-                $("formError").textContent = "This location already exists.";
+            try {
+                await send(state.editingName ? "update_location.php" : "save_location.php", data);
+                formDialog.close();
+                window.location.reload();
+            } catch (error) {
+                $("formError").textContent = error.message;
                 $("formError").hidden = false;
-                return;
             }
-
-            if (state.editingName) {
-                Object.assign(find(state.editingName), data);
-            } else {
-                items.push({ ...data, count: 0 });
-            }
-
-            formDialog.close();
-            render();
         });
 
         
@@ -309,7 +328,7 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
             viewDialog.showModal();
         }
 
-        $("viewEdit").addEventListener("click", () => openForm(state.targetName));
+        if ($("viewEdit")) { $("viewEdit").addEventListener("click", () => openForm(state.targetName)); }
 
         
         function openDelete(name) {
@@ -325,10 +344,17 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
             deleteDialog.showModal();
         }
 
-        $("deleteConfirm").addEventListener("click", () => {
-            items.splice(items.indexOf(find(state.targetName)), 1);
-            deleteDialog.close();
-            render();
+        $("deleteConfirm").addEventListener("click", async () => {
+            const data = new FormData();
+            data.append("id", find(state.targetName).id);
+
+            try {
+                await send("delete_location.php", data);
+                deleteDialog.close();
+                window.location.reload();
+            } catch (error) {
+                $("deleteText").textContent = error.message;
+            }
         });
 
         

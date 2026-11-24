@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../../backend/middleware/auth.php';
+auth_require_user();
 
 $pageTitle       = "Dashboard";
 $pageDescription = "Overview of your organization's hardware.";
@@ -80,7 +82,7 @@ $recentLocations = [
 ];
 
 $recentUsers = [
-    ["id" => "USR-006", "name" => "Maria Santos", "role" => "Administrator", "date" => "Oct 29, 2026"],
+    ["id" => "USR-006", "name" => "Maria Santos", "role" => "Admin", "date" => "Oct 29, 2026"],
     ["id" => "USR-005", "name" => "Angela Reyes", "role" => "Staff", "date" => "Oct 24, 2026"],
     ["id" => "USR-004", "name" => "Mark Villanueva", "role" => "Staff", "date" => "Oct 19, 2026"],
 ];

@@ -8,10 +8,15 @@ $menuItems = [
     ["hardware.php",    "bi-boxes",           "Hardware Inventory"],
     ["categories.php",  "bi-tags",            "Categories"],
     ["locations.php",   "bi-geo-alt",         "Locations"],
+    ["departments.php", "bi-building",        "Departments"],
+    ["employees.php",   "bi-person-badge",    "Employees"],
     ["assignments.php", "bi-clipboard-check", "Assignments"],
     ["maintenance.php", "bi-wrench",          "Maintenance"],
     ["users.php",       "bi-people",          "User Management"],
 ];
+if (!auth_has_role(HIMS_ROLE_ADMIN)) {
+    $menuItems = array_filter($menuItems, static fn($item) => $item[0] !== 'users.php');
+}
 ?>
 <aside class="sidebar">
     <div class="sidebar-brand">
@@ -38,8 +43,11 @@ $menuItems = [
 
     <div class="sidebar-bottom">
         
-        <a href="../account/login.php" class="nav-link" title="Logout">
-            <i class="bi bi-box-arrow-left"></i><span>Logout</span>
-        </a>
+        <form method="POST" action="../account/logout.php">
+            <?= auth_csrf_field() ?>
+            <button type="submit" class="nav-link" title="Logout">
+                <i class="bi bi-box-arrow-left"></i><span>Logout</span>
+            </button>
+        </form>
     </div>
 </aside>

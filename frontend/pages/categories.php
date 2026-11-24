@@ -1,17 +1,26 @@
 <?php
+require_once __DIR__ . '/../../backend/middleware/auth.php';
+auth_require_user();
+$canManageCategories = auth_has_role([HIMS_ROLE_ADMIN, HIMS_ROLE_INVENTORY_MANAGER]);
 
 $pageTitle       = "Categories";
 $pageDescription = "Organize hardware by type";
 $pageStyles      = ["categories"];
 
-$categories = [
-    ["name" => "Laptops",     "description" => "Portable workstations issued to staff", "count" => 5],
-    ["name" => "Desktops",    "description" => "Fixed office workstations",             "count" => 4],
-    ["name" => "Monitors",    "description" => "External displays",                     "count" => 3],
-    ["name" => "Printers",    "description" => "Printers and scanners",                 "count" => 3],
-    ["name" => "Networking",  "description" => "Routers, switches and access points",   "count" => 3],
-    ["name" => "Peripherals", "description" => "Projectors, webcams and accessories",   "count" => 3],
-];
+$stmt = $pdo->query(
+    "SELECT c.category_id AS id, c.category_name AS name,
+            COALESCE(c.description, '') AS description,
+            COUNT(h.asset_tag) AS `count`
+     FROM categories c
+     LEFT JOIN hardware h ON h.category_id = c.category_id
+     GROUP BY c.category_id, c.category_name, c.description
+     ORDER BY c.category_name"
+);
+$categories = array_map(static function (array $row): array {
+    $row['id'] = (int) $row['id'];
+    $row['count'] = (int) $row['count'];
+    return $row;
+}, $stmt->fetchAll(PDO::FETCH_ASSOC));
 
 $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE;
 ?>
@@ -19,6 +28,7 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
 <html lang="en">
 <head>
     <?php include "../includes/head.php"; ?>
+    <meta name="csrf-token" content="<?= htmlspecialchars(auth_csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
 </head>
 <body class="dashboard-page">
 
@@ -65,9 +75,11 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
                         <input type="search" id="searchInput" placeholder="Search categories" aria-label="Search categories">
                     </label>
 
+                    <?php if ($canManageCategories): ?>
                     <button type="button" class="primary-button" id="addButton">
                         <i class="bi bi-plus-lg"></i> Add Category
                     </button>
+                    <?php endif; ?>
                 </div>
 
                 <div class="table-container">
@@ -131,6 +143,7 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
     <script>
     (() => {
         
+        const canManage = <?= json_encode($canManageCategories) ?>;
         const items = <?= json_encode($categories, $jsonFlags) ?>;
 
         const state = {
@@ -160,8 +173,8 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
                 <td class="numeric-cell">${item.count}</td>
                 <td>
                     <div class="row-actions">
-                        <button type="button" class="icon-button" data-action="edit" data-name="${esc(item.name)}" aria-label="Edit ${esc(item.name)}"><i class="bi bi-pencil"></i></button>
-                        <button type="button" class="icon-button danger" data-action="delete" data-name="${esc(item.name)}" aria-label="Delete ${esc(item.name)}"><i class="bi bi-trash"></i></button>
+                        ${canManage ? `<button type="button" class="icon-button" data-action="edit" data-name="${esc(item.name)}" aria-label="Edit ${esc(item.name)}"><i class="bi bi-pencil"></i></button>
+                        <button type="button" class="icon-button danger" data-action="delete" data-name="${esc(item.name)}" aria-label="Delete ${esc(item.name)}"><i class="bi bi-trash"></i></button>` : `<span class="text-muted">—</span>`}
                     </div>
                 </td>
             </tr>`;
@@ -219,31 +232,36 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
             formDialog.showModal();
         }
 
-        $("addButton").addEventListener("click", () => openForm());
+        if ($("addButton")) { $("addButton").addEventListener("click", () => openForm()); }
 
-        form.addEventListener("submit", (event) => {
+        const csrf = () => document.querySelector('meta[name="csrf-token"]').content;
+
+        async function send(url, data) {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "X-CSRF-Token": csrf() },
+                body: data
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || "Something went wrong.");
+            }
+        }
+
+        form.addEventListener("submit", async (event) => {
             event.preventDefault();
 
-            const name = form.elements.name.value.trim();
-            const description = form.elements.description.value.trim();
+            const data = new FormData(form);
+            if (state.editingName) data.append("id", find(state.editingName).id);
 
-            const duplicate = items.some((item) =>
-                item.name.toLowerCase() === name.toLowerCase() && item.name !== state.editingName);
-
-            if (duplicate) {
-                $("formError").textContent = "This category already exists.";
+            try {
+                await send(state.editingName ? "update_category.php" : "save_category.php", data);
+                formDialog.close();
+                window.location.reload();
+            } catch (error) {
+                $("formError").textContent = error.message;
                 $("formError").hidden = false;
-                return;
             }
-
-            if (state.editingName) {
-                Object.assign(find(state.editingName), { name, description });
-            } else {
-                items.push({ name, description, count: 0 });
-            }
-
-            formDialog.close();
-            render();
         });
 
         
@@ -260,10 +278,17 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
             deleteDialog.showModal();
         }
 
-        $("deleteConfirm").addEventListener("click", () => {
-            items.splice(items.indexOf(find(state.targetName)), 1);
-            deleteDialog.close();
-            render();
+        $("deleteConfirm").addEventListener("click", async () => {
+            const data = new FormData();
+            data.append("id", find(state.targetName).id);
+
+            try {
+                await send("delete_category.php", data);
+                deleteDialog.close();
+                window.location.reload();
+            } catch (error) {
+                $("deleteText").textContent = error.message;
+            }
         });
 
         
